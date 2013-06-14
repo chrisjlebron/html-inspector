@@ -66,11 +66,12 @@ function Reporter() {
   this._errors = []
 }
 
-Reporter.prototype.warn = function(rule, message, context) {
+Reporter.prototype.warn = function(rule, message, context, styles) {
   this._errors.push({
     rule: rule,
     message: message,
-    context: context
+    context: context,
+    styles: styles
   })
 }
 
@@ -177,7 +178,7 @@ var HTMLInspector = (function() {
       domRoot: "html",
       onComplete: function(errors) {
         errors.forEach(function(error) {
-          console.warn(error.message, error.context)
+          console.log('%c' + error.message, error.styles, error.context)
         })
       }
     },
@@ -1099,7 +1100,8 @@ HTMLInspector.rules.add("inline-event-handlers", function(listener, reporter) {
       reporter.warn(
         "inline-event-handlers",
         "An '" + name + "' attribute was found in the HTML. Use external scripts for event binding instead.",
-        this
+        this,
+        "color:red;"
       )
     }
   })
@@ -1143,7 +1145,8 @@ HTMLInspector.rules.add(
             "script-placement",
             "<script> elements should appear right before "
             + "the closing </body> tag for optimal performance.",
-            el
+            el,
+            "color:red;"
           )
         }
       })
@@ -1167,7 +1170,8 @@ HTMLInspector.rules.add(
         reporter.warn(
           "unnecessary-elements",
           "Do not use <div> or <span> elements without any attributes.",
-          this
+          this,
+          "color:red;"
         )
       }
     }
@@ -1191,7 +1195,8 @@ HTMLInspector.rules.add(
           "The class '"
           + name
           + "' is used in the HTML but not found in any stylesheet.",
-          this
+          this,
+          "color:red;"
         )
       }
     }
@@ -1286,7 +1291,8 @@ HTMLInspector.rules.add(
               "The BEM element '" + name
               + "' must be a descendent of '" + config.getBlockName(name)
               + "'.",
-              this
+              this,
+          "color:red;"
             )
           }
         }
@@ -1297,7 +1303,8 @@ HTMLInspector.rules.add(
               "The BEM modifier class '" + name
               + "' was found without the unmodified class '" + config.getBlockName(name)
               +  "'.",
-              this
+              this,
+          "color:red;"
             )
           }
         }
@@ -1337,7 +1344,8 @@ HTMLInspector.rules.add("duplicate-ids", function(listener, reporter) {
         reporter.warn(
           "duplicate-ids",
           "The id '" + element.id + "' appears more than once in the document.",
-          offenders
+          offenders,
+          "color:red;"
         )
       }
     }
@@ -1361,7 +1369,8 @@ HTMLInspector.rules.add("scoped-styles", function(listener, reporter) {
         reporter.warn(
           "scoped-styles",
           "<style> elements outside of <head> must declare the 'scoped' attribute.",
-          this
+          this,
+          "color:red;"
         )
       }
     }
@@ -1397,7 +1406,8 @@ HTMLInspector.rules.add(
           reporter.warn(
             "unique-elements",
             "The <" + item + "> element may only appear once in the document.",
-            map[item]
+            map[item],
+          "color:red;"
           )
         }
       })
@@ -1417,7 +1427,8 @@ HTMLInspector.rules.add("validate-attributes", function(listener, reporter) {
           "validate-attributes",
           "The '" + attr + "' attribute is required for <"
           + name + "> elements.",
-          this
+          this,
+          "color:red;"
         )
       }
     }, this)
@@ -1430,7 +1441,8 @@ HTMLInspector.rules.add("validate-attributes", function(listener, reporter) {
         "validate-attributes",
         "The '" + name + "' attribute is no longer valid on the <"
         + element + "> element and should not be used.",
-        this
+        this,
+          "color:red;"
       )
     }
     else if (!validation.isAttributeValidForElement(name, element)) {
@@ -1438,7 +1450,8 @@ HTMLInspector.rules.add("validate-attributes", function(listener, reporter) {
         "validate-attributes",
         "'" + name + "' is not a valid attribute of the <"
         + element + "> element.",
-        this
+        this,
+          "color:red;"
       )
     }
   })
@@ -1454,14 +1467,16 @@ HTMLInspector.rules.add("validate-elements", function(listener, reporter) {
       reporter.warn(
         "validate-elements",
         "The <" + name + "> element is obsolete and should not be used.",
-        this
+        this,
+          "color:red;"
       )
     }
     else if (!validation.isElementValid(name)) {
       reporter.warn(
         "validate-elements",
         "The <" + name + "> element is not a valid HTML element.",
-        this
+        this,
+          "color:red;"
       )
     }
   })
