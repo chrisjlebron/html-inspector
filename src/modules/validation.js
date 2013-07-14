@@ -349,7 +349,7 @@ HTMLInspector.modules.add("validation", function() {
       attributes: "globals"
     },
     "select": {
-      children: "option, optgroup",
+      children: "option; optgroup",
       attributes: "globals; autofocus; disabled; form; multiple; name; required; size"
     },
     "small": {
@@ -395,6 +395,10 @@ HTMLInspector.modules.add("validation", function() {
     "td": {
       children: "flow",
       attributes: "globals; colspan; rowspan; headers"
+    },
+    "template": {
+      children: "flow; metadata",
+      attributes: "globals"
     },
     "textarea": {
       children: "text",
@@ -458,20 +462,56 @@ HTMLInspector.modules.add("validation", function() {
   // ============================================================
 
   var elementCategories = {
-    "metadata": "base; link; meta; noscript; script; style; title",
-    "flow": "a; abbr; address; article; aside; audio; b; bdi; bdo; blockquote; br; button; canvas; cite; code; data; datalist; del; details; dfn; dialog; div; dl; em; embed; fieldset; figure; footer; form; h1; h2; h3; h4; h5; h6; header; hr; i; iframe; img; input; ins; kbd; keygen; label; main; map; mark; math; menu; meter; nav; noscript; object; ol; output; p; pre; progress; q; ruby; s; samp; script; section; select; small; span; strong; sub; sup; svg; table; textarea; time; u; ul; var; video; wbr; Text",
-    "sectioning": "article; aside; nav; section",
-    "heading": "h1; h2; h3; h4; h5; h6;",
-    "phrasing": "a; abbr; audio; b; bdi; bdo; br; button; canvas; cite; code; data; datalist; del; dfn; em; embed; i; iframe; img; input; ins; kbd; keygen; label; map; mark; math; meter; noscript; object; output; progress; q; ruby; s; samp; script; select; small; span; strong; sub; sup; svg; textarea; time; u; var; video; wbr; Text",
-    "embedded": "audio canvas embed iframe img math object svg video",
-    "interactive": "a; button; details; embed; iframe; keygen; label; select; textarea;",
-    "sectioning roots": "blockquote; body; details; dialog; fieldset; figure; td",
-    "form-associated": "button; fieldset; input; keygen; label; object; output; select; textarea",
-    "listed": "button; fieldset; input; keygen; object; output; select; textarea",
-    "submittable": "button; input; keygen; object; select; textarea",
-    "resettable": "input; keygen; output; select; textarea",
-    "labelable": "button; input; keygen; meter; output; progress; select; textarea",
-    "palpable": "a; abbr; address; article; aside; b; bdi; bdo; blockquote; button; canvas; cite; code; data; details; dfn; div; em; embed; fieldset; figure; footer; form; h1; h2; h3; h4; h5; h6; header; i; iframe; img; ins; kbd; keygen; label; map; mark; math; meter; nav; object; output; p; pre; progress; q; ruby; s; samp; section; select; small; span; strong; sub; sup; svg; table; textarea; time; u; var; video"
+    "metadata": {
+      elements: ["base", "link", "meta", "noscript", "script", "style", "title"]
+    },
+    "flow": {
+      elements: ["a", "abbr", "address", "article", "aside", "audio", "b", "bdi", "bdo", "blockquote", "br", "button", "canvas", "cite", "code", "data", "datalist", "del", "details", "dfn", "dialog", "div", "dl", "em", "embed", "fieldset", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "i", "iframe", "img", "input", "ins", "kbd", "keygen", "label", "main", "map", "mark", "math", "menu", "meter", "nav", "noscript", "object", "ol", "output", "p", "pre", "progress", "q", "ruby", "s", "samp", "script", "section", "select", "small", "span", "strong", "sub", "sup", "svg", "table", "textarea", "time", "u", "ul", "var", "video", "wbr"],
+      exceptions: ["area", "link", "meta", "style"],
+      exceptionsSelectors: ["map area", "link[itemprop]", "meta[itemprop]", "style[scoped]"]
+    },
+    "sectioning": {
+      elements: ["article", "aside", "nav", "section"]
+    },
+    "heading": {
+      elements: ["h1", "h2", "h3", "h4", "h5", "h6"]
+    },
+    "phrasing": {
+      elements: ["a", "abbr", "audio", "b", "bdi", "bdo", "br", "button", "canvas", "cite", "code", "data", "datalist", "del", "dfn", "em", "embed", "i", "iframe", "img", "input", "ins", "kbd", "keygen", "label", "map", "mark", "math", "meter", "noscript", "object", "output", "progress", "q", "ruby", "s", "samp", "script", "select", "small", "span", "strong", "sub", "sup", "svg", "textarea", "time", "u", "var", "video", "wbr"],
+      exceptions: ["area", "link", "meta"],
+      exceptionsSelectors: ["map area", "link[itemprop]", "meta[itemprop]"]
+    },
+    "embedded": {
+      elements: ["audio", "canvas", "embed", "iframe", "img", "math", "object", "svg", "video"]
+    },
+    "interactive": {
+      elements: ["a", "button", "details", "embed", "iframe", "keygen", "label", "select", "textarea"],
+      exceptions: ["audio", "img", "input", "object", "video"],
+      exceptionsSelectors: ["audio[controls]", "img[usemap]", "input:not([type=hidden])", "object[usemap]", "video[controls]"]
+    },
+    "sectioning roots": {
+      elements: ["blockquote", "body", "details", "dialog", "fieldset", "figure", "td"]
+    },
+    "form-associated": {
+      elements: ["button", "fieldset", "input", "keygen", "label", "object", "output", "select", "textarea"]
+    },
+    "listed": {
+      elements: ["button", "fieldset", "input", "keygen", "object", "output", "select", "textarea"]
+    },
+    "submittable": {
+      elements: ["button", "input", "keygen", "object", "select", "textarea"]
+    },
+    "resettable": {
+      elements: ["input", "keygen", "output", "select", "textarea"]
+    },
+    "labelable": {
+      elements: ["button", "input", "keygen", "meter", "output", "progress", "select", "textarea"]
+    },
+    "palpable": {
+      elements: ["a", "abbr", "address", "article", "aside", "b", "bdi", "bdo", "blockquote", "button", "canvas", "cite", "code", "data", "details", "dfn", "div", "em", "embed", "fieldset", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "i", "iframe", "img", "ins", "kbd", "keygen", "label", "map", "mark", "math", "meter", "nav", "object", "output", "p", "pre", "progress", "q", "ruby", "s", "samp", "section", "select", "small", "span", "strong", "sub", "sup", "svg", "table", "textarea", "time", "u", "var", "video"],
+      exceptions: ["audio", "dl", "input", "menu", "ol", "ul"],
+      exceptionsSelectors: ["audio[controls]", "dl", "input:not([type=hidden])", "menu[type=toolbar]", "ol", "ul"]
+    }
   }
 
   // ============================================================
@@ -717,42 +757,12 @@ HTMLInspector.modules.add("validation", function() {
   }
 
   function allowedAttributesForElement(element) {
-    return elementData[element].attributes.replace(/\*/g, "").split(/\s*;\s*/)
+    // return an empty array if the element is invalid
+    if (elementData[element])
+      return elementData[element].attributes.replace(/\*/g, "").split(/\s*;\s*/)
+    else
+      return []
   }
-
-  //
-  // WARNING: There are issues with this, do not use!
-  //
-  // function allowedChildrenGivenElementLocation(element) {
-  //   var children = elementData[elementName(element)]
-  //         .children
-  //         .replace(/\*/g, "")
-  //         .split(/\s*;\s*/)
-  //   return children.reduce(function(list, child) {
-  //     // for complicated cases, child may be a function that accepts
-  //     // and element and returns a list of acceptable children
-  //     if (typeof child === "function") {
-  //       return list.concat(child(element))
-  //     }
-  //     // elements with a content model of "transparent" essentially
-  //     // inherit the content model of their parent, so inspect that
-  //     else if (child === "transparent" && element.parentNode) {
-  //       return list.concat(allowedChildrenForElement(element.parentNode))
-  //     }
-  //     // if a category is returned, add all elements in that
-  //     // cateogry to the list
-  //     else if (elementCategories[child]) {
-  //       return list.concat(elementsForCategory(child))
-  //     }
-  //     // if just an element is returned, add it to the list
-  //     else if (isElementValid(child)) {
-  //       return list.concat([child])
-  //     }
-  //     // still here? just return the list
-  //     return list
-  //   }, [])
-  // }
-  //
 
   function elementsForCategory(category) {
     return elementCategories[category].split(/\s*;\s*/)
@@ -770,6 +780,27 @@ HTMLInspector.modules.add("validation", function() {
     return foundIn(attribute, spec.attributeWhitelist)
   }
 
+  function getAllowedChildElements(parent) {
+    var contents
+      , contentModel = []
+
+    // ignore children properties that contain an asterisk for now
+    contents = elementData[parent].children
+    contents = contents.indexOf("*") > -1 ? [] : contents.split(/\s*\;\s*/)
+
+    // replace content categories with their elements
+    contents.forEach(function(item) {
+      if (elementCategories[item]) {
+        contentModel = contentModel.concat(elementCategories[item].elements)
+        contentModel = contentModel.concat(elementCategories[item].exceptions || [])
+      } else {
+        contentModel.push(item)
+      }
+    })
+    // return a guaranteed match (to be safe) when there's no children
+    return contentModel.length ? contentModel : [/[\s\S]+/]
+  }
+
   var spec = {
 
     // This allows AngularJS's ng-* attributes to be allowed,
@@ -782,11 +813,15 @@ HTMLInspector.modules.add("validation", function() {
     elementWhitelist: [],
 
     isElementValid: function(element) {
-      return elements.indexOf(element) >= 0
+      return isWhitelistedElement(element)
+        ? true
+        : elements.indexOf(element) >= 0
     },
 
     isElementObsolete: function(element) {
-      return obsoluteElements.indexOf(element) >= 0
+      return isWhitelistedElement(element)
+        ? false
+        : obsoluteElements.indexOf(element) >= 0
     },
 
     isAttributeValidForElement: function(attribute, element) {
@@ -800,7 +835,7 @@ HTMLInspector.modules.add("validation", function() {
     },
 
     isAttributeObsoleteForElement: function(attribute, element) {
-      // obsolete element can still be whitelisted
+      // attributes in the whitelist are never considered obsolete
       if (isWhitelistedAttribute(attribute)) return false
 
       return obsoleteAttributes.some(function(item) {
@@ -812,6 +847,9 @@ HTMLInspector.modules.add("validation", function() {
     },
 
     isAttributeRequiredForElement: function(attribute, element) {
+      // attributes in the whitelist are never considered required
+      if (isWhitelistedAttribute(attribute)) return false
+
       return requiredAttributes.some(function(item) {
         return element == item.element && item.attributes.indexOf(attribute) >= 0
       })
@@ -822,16 +860,15 @@ HTMLInspector.modules.add("validation", function() {
         return item.element == element
       })
       return (filtered[0] && filtered[0].attributes) || []
-    }
+    },
 
-    //
-    // WARNING: there are issues with this at the moment, do not use!
-    //
-    // isElementValidLocation: function(element) {
-    //   if (!element.parentNode) return true
-    //   var allowedChildren = allowedChildrenGivenElementLocation(element.parentNode)
-    //   return allowedChildren.indexOf(elementName(element)) >= 0
-    // }
+    isChildAllowedInParent: function(child, parent) {
+      // only check if both elements are valid elements
+      if (!elementData[child] || !elementData[parent])
+        return true
+      else
+        return foundIn(child, getAllowedChildElements(parent))
+    }
 
   }
 

@@ -1,7 +1,28 @@
+var no = { op: function(){}}
+
+function parseHTML(string) {
+  var container = document.createElement("div")
+  container.innerHTML = string
+  return container.firstChild
+}
+
 describe("HTMLInspector", function() {
 
   var originalRules = HTMLInspector.rules
     , originalModules = HTMLInspector.modules
+    , html = parseHTML(''
+        + '<section class="section">'
+        + '  <h1 id="heading" class="multiple classes">Heading</h1>'
+        + '  <p class="first">One</p>'
+        + '  <p><a href="#">More</a></p>'
+        + '  <blockquote data-foo="bar" onclick="somefunc()">'
+        + '    <p style="display: inline;">Nested</p>'
+        + '    <p class="stuff">Stuff'
+        + '      <em id="emphasis" data-bar="foo">lolz</em>'
+        + '    </p>'
+        + '  </blockquote>'
+        + '</section>'
+      )
 
   beforeEach(function() {
     // remove all rule and modules
@@ -64,6 +85,11 @@ describe("HTMLInspector", function() {
   it("accepts a variety of options for the config paramter", function() {
     var log = []
       , div = document.createElement("div")
+      , dom
+
+    // create the dom object
+    (dom = document.createElement("p")).innerHTML = "foobar"
+
     HTMLInspector.rules.add("dom", function(listener, reporter) {
       listener.on("element", function(name) {
         log.push(this)
@@ -75,7 +101,7 @@ describe("HTMLInspector", function() {
     // if it's an object, assume it's the full config object
     HTMLInspector.inspect({
       useRules: ["dom"],
-      domRoot: "<p>foobar</p>",
+      domRoot: dom,
       onComplete: function(errors) {
         log.push("done")
       }
@@ -87,19 +113,12 @@ describe("HTMLInspector", function() {
     HTMLInspector.inspect(["dom"])
     expect(log[0]).not.toBe("rules")
     log = []
-    // if it's a string, assume it's a selector or HTML representing domRoot
+    // if it's a string, assume it's a selector
     HTMLInspector.inspect("body")
-    expect(log[1]).toBe($("body")[0])
-    log = []
-    HTMLInspector.inspect("<p>foobar</p>")
-    expect(log[1].innerHTML).toBe("foobar")
+    expect(log[1]).toBe(document.body)
     log = []
     // if it's a DOM element, assume it's the domRoot
     HTMLInspector.inspect(div)
-    expect(log[1]).toBe(div)
-    log = []
-    // if it's jQuery, assume it's the domRoot
-    HTMLInspector.inspect($(div))
     expect(log[1]).toBe(div)
     log = []
     // if it's a function, assume it's complete
@@ -109,210 +128,290 @@ describe("HTMLInspector", function() {
     expect(log).toBe("func")
   })
 
-  describe("DOM Traversal and Events", function() {
-
-    var $html = $(''
-          + '<section class="section">'
-          + '  <h1 id="heading" class="multiple classes">Heading</h1>'
-          + '  <p class="first">One</p>'
-          + '  <p><a href="#">More</a></p>'
-          + '  <blockquote data-foo="bar" onclick="somefunc()">'
-          + '    <p style="display: inline;">Nested</p>'
-          + '    <p class="stuff">Stuff'
-          + '      <em id="emphasis" data-bar="foo">lolz</em>'
-          + '    </p>'
-          + '  </blockquote>'
-          + '</section>'
-        )
-
-    it("inspects the HTML starting from the specified domRoot", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("element", function(name) {
-          events.push(name)
-        })
+  it("ignores elements matching the `exclude` config option", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("element", function(name) {
+        events.push(name)
       })
-      HTMLInspector.inspect()
-      expect(events[0]).toBe("html")
-      events = []
-      HTMLInspector.inspect({ domRoot: $html })
-      expect(events[0]).toBe("section")
     })
+    HTMLInspector.inspect({
+      domRoot: html,
+      exclude: ["h1", "p"]
+    })
+    expect(events).toEqual(["section", "a", "blockquote", "em"])
+    events = []
+    HTMLInspector.inspect({
+      domRoot: html,
+      exclude: html.querySelector("blockquote")
+    })
+    expect(events).toEqual(["section", "h1", "p", "p", "a", "p", "p", "em"])
+  })
 
-    it("triggers `beforeInspect` before the DOM traversal", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("beforeInspect", function() {
-          events.push("beforeInspect")
-        })
-        listener.on("element", function() {
-          events.push("element")
-        })
+  it("ignores elements that descend from the `excludeSubTree` config option", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("element", function(name) {
+        events.push(name)
       })
-      HTMLInspector.inspect($html)
-      expect(events.length).toBeGreaterThan(2)
-      expect(events[0]).toBe("beforeInspect")
-      expect(events[1]).toBe("element")
     })
+    HTMLInspector.inspect({
+      domRoot: html,
+      excludeSubTree: "p"
+    })
+    expect(events).toEqual(["section", "h1", "p", "p", "blockquote", "p", "p"])
+    events = []
+    HTMLInspector.inspect({
+      domRoot: html,
+      excludeSubTree: [html.querySelector("p:not(.first)"), html.querySelector("blockquote")]
+    })
+    expect(events).toEqual(["section", "h1", "p", "p", "blockquote"])
+  })
 
-    it("traverses the DOM emitting events for each element", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("element", function(name) {
-          events.push(name)
-        })
+  it("inspects the HTML starting from the specified domRoot", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("element", function(name) {
+        events.push(name)
       })
-      HTMLInspector.inspect($html)
-      expect(events.length).toBe(9)
-      expect(events[0]).toBe("section")
-      expect(events[1]).toBe("h1")
-      expect(events[2]).toBe("p")
-      expect(events[3]).toBe("p")
-      expect(events[4]).toBe("a")
-      expect(events[5]).toBe("blockquote")
-      expect(events[6]).toBe("p")
-      expect(events[7]).toBe("p")
-      expect(events[8]).toBe("em")
     })
+    HTMLInspector.inspect()
+    expect(events[0]).toBe("html")
+    events = []
+    HTMLInspector.inspect({ domRoot: html })
+    expect(events[0]).toBe("section")
+  })
 
-    it("traverses the DOM emitting events for each id attribute", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("id", function(name) {
-          events.push(name)
-        })
+  it("triggers `beforeInspect` before the DOM traversal", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("beforeInspect", function() {
+        events.push("beforeInspect")
       })
-      HTMLInspector.inspect($html)
-      expect(events.length).toBe(2)
-      expect(events[0]).toBe("heading")
-      expect(events[1]).toBe("emphasis")
-    })
-
-    it("traverses the DOM emitting events for each class attribute", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("class", function(name) {
-          events.push(name)
-        })
+      listener.on("element", function() {
+        events.push("element")
       })
-      HTMLInspector.inspect($html)
-      expect(events.length).toBe(5)
-      expect(events[0]).toBe("section")
-      expect(events[1]).toBe("multiple")
-      expect(events[2]).toBe("classes")
-      expect(events[3]).toBe("first")
-      expect(events[4]).toBe("stuff")
     })
+    HTMLInspector.inspect(html)
+    expect(events.length).toBeGreaterThan(2)
+    expect(events[0]).toBe("beforeInspect")
+    expect(events[1]).toBe("element")
+  })
 
-    it("traverses the DOM emitting events for each attribute", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("attribute", function(name, value) {
-          events.push({name:name, value:value})
-        })
+  it("traverses the DOM emitting events for each element", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("element", function(name) {
+        events.push(name)
       })
-      HTMLInspector.inspect($html)
-      expect(events.length).toBe(11)
-      expect(events[0]).toEqual({name:"class", value:"section"})
-      expect(events[1]).toEqual({name:"id", value:"heading"})
-      expect(events[2]).toEqual({name:"class", value:"multiple classes"})
-      expect(events[3]).toEqual({name:"class", value:"first"})
-      expect(events[4]).toEqual({name:"href", value:"#"})
-      expect(events[5]).toEqual({name:"data-foo", value:"bar"})
-      expect(events[6]).toEqual({name:"onclick", value:"somefunc()"})
-      expect(events[7]).toEqual({name:"style", value:"display: inline;"})
-      expect(events[8]).toEqual({name:"class", value:"stuff"})
-      expect(events[9]).toEqual({name:"id", value:"emphasis"})
-      expect(events[10]).toEqual({name:"data-bar", value:"foo"})
     })
+    HTMLInspector.inspect(html)
+    expect(events.length).toBe(9)
+    expect(events[0]).toBe("section")
+    expect(events[1]).toBe("h1")
+    expect(events[2]).toBe("p")
+    expect(events[3]).toBe("p")
+    expect(events[4]).toBe("a")
+    expect(events[5]).toBe("blockquote")
+    expect(events[6]).toBe("p")
+    expect(events[7]).toBe("p")
+    expect(events[8]).toBe("em")
+  })
 
-    it("triggers `afterInspect` after the DOM traversal", function() {
-      var events = []
-      HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
-        listener.on("afterInspect", function() {
-          events.push("afterInspect")
-        })
-        listener.on("element", function() {
-          events.push("element")
-        })
+  it("traverses the DOM emitting events for each id attribute", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("id", function(name) {
+        events.push(name)
       })
-      HTMLInspector.inspect($html)
-      expect(events.length).toBeGreaterThan(2)
-      expect(events[events.length - 1]).toBe("afterInspect")
     })
+    HTMLInspector.inspect(html)
+    expect(events.length).toBe(2)
+    expect(events[0]).toBe("heading")
+    expect(events[1]).toBe("emphasis")
+  })
 
+  it("traverses the DOM emitting events for each class attribute", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("class", function(name) {
+        events.push(name)
+      })
+    })
+    HTMLInspector.inspect(html)
+    expect(events.length).toBe(5)
+    expect(events[0]).toBe("section")
+    expect(events[1]).toBe("multiple")
+    expect(events[2]).toBe("classes")
+    expect(events[3]).toBe("first")
+    expect(events[4]).toBe("stuff")
+  })
+
+  it("traverses the DOM emitting events for each attribute", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("attribute", function(name, value) {
+        events.push({name:name, value:value})
+      })
+    })
+    HTMLInspector.inspect(html)
+    expect(events.length).toBe(11)
+    expect(events[0]).toEqual({name:"class", value:"section"})
+    expect(events[1]).toEqual({name:"class", value:"multiple classes"})
+    expect(events[2]).toEqual({name:"id", value:"heading"})
+    expect(events[3]).toEqual({name:"class", value:"first"})
+    expect(events[4]).toEqual({name:"href", value:"#"})
+    expect(events[5]).toEqual({name:"data-foo", value:"bar"})
+    expect(events[6]).toEqual({name:"onclick", value:"somefunc()"})
+    expect(events[7]).toEqual({name:"style", value:"display: inline;"})
+    expect(events[8]).toEqual({name:"class", value:"stuff"})
+    expect(events[9]).toEqual({name:"data-bar", value:"foo"})
+    expect(events[10]).toEqual({name:"id", value:"emphasis"})
+  })
+
+  it("triggers `afterInspect` after the DOM traversal", function() {
+    var events = []
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("afterInspect", function() {
+        events.push("afterInspect")
+      })
+      listener.on("element", function() {
+        events.push("element")
+      })
+    })
+    HTMLInspector.inspect(html)
+    expect(events.length).toBeGreaterThan(2)
+    expect(events[events.length - 1]).toBe("afterInspect")
+  })
+
+  it("ignores SVG elements and their children", function() {
+    var events = []
+      , div = document.createElement("div")
+    HTMLInspector.rules.add("traverse-test", function(listener, reporter) {
+      listener.on("element", function(name) {
+        events.push(name)
+      })
+    })
+    div.innerHTML = ""
+      + '<svg viewBox="0 0 512 512" height="22" width="22">'
+      + '  <path></path>'
+      + '</svg>'
+    HTMLInspector.inspect(div)
+    expect(events.length).toBe(1)
+    expect(events[0]).toBe("div")
+  })
+
+
+})
+
+describe("Callbacks", function() {
+
+  var Callbacks = HTMLInspector._constructors.Callbacks
+    , cb
+    , log
+    , f1 = function(a, b, c) { log.push({id:"f1", args:[a, b, c], context:this}) }
+    , f2 = function(a, b, c) { log.push({id:"f2", args:[a, b, c], context:this}) }
+    , f3 = function(a, b, c) { log.push({id:"f3", args:[a, b, c], context:this}) }
+
+  beforeEach(function() {
+    cb = new Callbacks()
+    log = []
+  })
+
+  it("can add functions", function() {
+    cb.add(f1)
+    cb.add(f2)
+    cb.add(f3)
+    expect(cb.handlers.length).toBe(3)
+    expect(cb.handlers[0]).toBe(f1)
+    expect(cb.handlers[1]).toBe(f2)
+    expect(cb.handlers[2]).toBe(f3)
+  })
+
+  it("can remove functions", function() {
+    cb.add(f1)
+    cb.add(f2)
+    cb.add(f3)
+    cb.remove(f2)
+    expect(cb.handlers.length).toBe(2)
+    expect(cb.handlers[0]).toBe(f1)
+    expect(cb.handlers[1]).toBe(f3)
+    cb.remove(f3)
+    expect(cb.handlers.length).toBe(1)
+    expect(cb.handlers[0]).toBe(f1)
+    cb.remove(f1)
+    expect(cb.handlers.length).toBe(0)
+  })
+
+  it("call invoke the list of callbacks", function() {
+    cb.fire()
+    expect(log.length).toBe(0)
+    cb.add(f1)
+    cb.fire("ctx1", ["arg1", "arg2"])
+    expect(log.length).toBe(1)
+    expect(log[0]).toEqual({id:"f1", args:["arg1", "arg2", undefined], context:"ctx1"})
+    log = []
+    cb.add(f2)
+    cb.fire("ctx1", ["arg1", "arg2", "arg3"])
+    expect(log.length).toBe(2)
+    expect(log[0]).toEqual({id:"f1", args:["arg1", "arg2", "arg3"], context:"ctx1"})
+    expect(log[1]).toEqual({id:"f2", args:["arg1", "arg2", "arg3"], context:"ctx1"})
+    log = []
+    cb.add(f3)
+    cb.fire("ctx2")
+    expect(log.length).toBe(3)
+    expect(log[0]).toEqual({id:"f1", args:[undefined, undefined, undefined], context:"ctx2"})
+    expect(log[1]).toEqual({id:"f2", args:[undefined, undefined, undefined], context:"ctx2"})
+    expect(log[2]).toEqual({id:"f3", args:[undefined, undefined, undefined], context:"ctx2"})
+    log = []
+    cb.remove(f2)
+    cb.fire("ctx3", ["arg1"])
+    expect(log.length).toBe(2)
+    expect(log[0]).toEqual({id:"f1", args:["arg1", undefined, undefined], context:"ctx3"})
+    expect(log[1]).toEqual({id:"f3", args:["arg1", undefined, undefined], context:"ctx3"})
   })
 
 })
 
 describe("Listener", function() {
 
-  var Listener = getListenerConstructor()
-
-  function getListenerConstructor() {
-    var Listener
-      , originalRules = HTMLInspector.rules
-    HTMLInspector.rules.add("listener", function(listener) {
-      Listener = listener.constructor
-    })
-    HTMLInspector.inspect({
-      useRules: ["listener"],
-      domRoot: document.createElement("div")
-    })
-    HTMLInspector.rules = originalRules
-    return Listener
-  }
-
+  var Listener = HTMLInspector._constructors.Listener
 
   it("can add handlers to a specific event", function() {
     var listener = new Listener()
-    listener.on("foo", $.noop)
-    listener.on("bar", $.noop)
+    listener.on("foo", no.op)
+    listener.on("bar", no.op)
     expect(listener._events.foo).toBeDefined()
     expect(listener._events.bar).toBeDefined()
   })
 
   it("can trigger handlers on a specific event", function() {
     var listener = new Listener()
-    spyOn($, "noop")
-    listener.on("foo", $.noop)
-    listener.on("bar", $.noop)
+    spyOn(no, "op")
+    listener.on("foo", no.op)
+    listener.on("bar", no.op)
     listener.trigger("foo")
     listener.trigger("bar")
-    expect($.noop.callCount).toBe(2)
+    expect(no.op.callCount).toBe(2)
   })
 
   it("can remove handlers from a specific event", function() {
     var listener = new Listener()
-    spyOn($, "noop")
-    listener.on("foo", $.noop)
-    listener.on("bar", $.noop)
-    listener.off("foo", $.noop)
-    listener.off("bar", $.noop)
+    spyOn(no, "op")
+    listener.on("foo", no.op)
+    listener.on("bar", no.op)
+    listener.off("foo", no.op)
+    listener.off("bar", no.op)
     listener.trigger("foo")
     listener.trigger("bar")
-    expect($.noop.callCount).toBe(0)
+    expect(no.op.callCount).toBe(0)
   })
 
 })
 
 describe("Reporter", function() {
 
-  var Reporter = getReporterConstructor()
-
-  function getReporterConstructor() {
-    var Reporter
-      , originalRules = HTMLInspector.rules
-    HTMLInspector.rules.add("reporter", function(reporter, reporter) {
-      Reporter = reporter.constructor
-    })
-    HTMLInspector.inspect({
-      useRules: ["reporter"],
-      domRoot: document.createElement("div")
-    })
-    HTMLInspector.rules = originalRules
-    return Reporter
-  }
+  var Reporter = HTMLInspector._constructors.Reporter
 
   it("can add an error to the report log", function() {
     var reporter = new Reporter()
@@ -332,6 +431,170 @@ describe("Reporter", function() {
     expect(reporter.getWarnings()[0].message).toBe("This is the first message")
     expect(reporter.getWarnings()[1].message).toBe("This is the second message")
     expect(reporter.getWarnings()[2].message).toBe("This is the third message")
+  })
+
+})
+
+describe("Utils", function() {
+
+  describe("toArray", function() {
+    var toArray = HTMLInspector.utils.toArray
+    it("consumes an array-like object and returns it as an array", function() {
+      var args
+      (function(a, b, c) {
+        args = toArray(arguments)
+      }("foo", "bar", "baz"))
+      expect(Array.isArray(args)).toBe(true)
+      expect(args).toEqual(["foo", "bar", "baz"])
+
+      var scripts = toArray(document.querySelectorAll("script"))
+      expect(Array.isArray(scripts)).toBe(true)
+      expect(scripts.length).toBeGreaterThan(0)
+
+      expect(toArray("foo")).toEqual(["f", "o", "o"])
+
+      var div = document.createElement("div")
+      div.className = "foo"
+      expect(toArray(div.attributes).length).toEqual(1)
+    })
+
+    it("returns an empty array if it receives anything it can't turn in to an Array", function() {
+      expect(toArray(null)).toEqual([])
+      expect(toArray(undefined)).toEqual([])
+      expect(toArray({})).toEqual([])
+      expect(toArray(4)).toEqual([])
+      expect(toArray(document.body)).toEqual([])
+    })
+
+  })
+
+  describe("getAttributes", function() {
+    var getAttributes = HTMLInspector.utils.getAttributes
+    it("returns an array of the element attributes, sorted alphabetically by class name", function() {
+      var div = document.createElement("div")
+      div.setAttribute("foo", "FOO")
+      div.setAttribute("bar", "BAR")
+      div.setAttribute("baz", "BAZ")
+      expect(getAttributes(div)).toEqual([
+        {name: "bar", value: "BAR"},
+        {name: "baz", value: "BAZ"},
+        {name: "foo", value: "FOO"}
+      ])
+    })
+  })
+
+  describe("isRegExp", function() {
+    var isRegExp = HTMLInspector.utils.isRegExp
+    it("returns true if the passed object is a Regular Expression", function() {
+      expect(isRegExp(/foo/ig)).toBe(true)
+      expect(isRegExp(new RegExp("foo", "g"))).toBe(true)
+      expect(isRegExp("foo")).toBe(false)
+      expect(isRegExp(null)).toBe(false)
+    })
+  })
+
+  describe("unique", function() {
+    var unique = HTMLInspector.utils.unique
+    it("consume an array and return a new array with no duplicate values", function() {
+      expect(unique([1,2,2,3,1,4,5,4,5,6,5])).toEqual([1,2,3,4,5,6])
+      expect(unique(["foo", "bar", "bar", "bar", "baz", "fo"])).toEqual(["bar", "baz", "fo", "foo"])
+    })
+  })
+
+  describe("extend", function() {
+    var extend = HTMLInspector.utils.extend
+    it("extends a given object with all the properties in passed-in object(s)", function() {
+      expect(extend({a:1, b:2}, {a:"a"})).toEqual({a:"a", b:2})
+      expect(extend({a:1, b:2}, {a:null, c:"c"}, {b:undefined})).toEqual({a:null, b:undefined, c:"c"})
+    })
+  })
+
+
+  describe("foundIn", function() {
+    var foundIn = HTMLInspector.utils.foundIn
+    it("matches a string against a string, RegExp, or list of strings/RegeExps", function() {
+      expect(foundIn("foo", "foo")).toBe(true)
+      expect(foundIn("foo", /^fo\w/)).toBe(true)
+      expect(foundIn("foo", [/\d+/, /^fo\w/])).toBe(true)
+      expect(foundIn("foo", ["fo", "f", /foo/])).toBe(true)
+      expect(foundIn("bar", "foo")).toBe(false)
+      expect(foundIn("bar", /^fo\w/)).toBe(false)
+      expect(foundIn("bar", [/\d+/, /^fo\w/])).toBe(false)
+      expect(foundIn("bar", ["fo", "f", /foo/])).toBe(false)
+    })
+  })
+
+  describe("isCrossOrigin", function() {
+    var isCrossOrigin = HTMLInspector.utils.isCrossOrigin
+    it("returns true if the URL is cross-origin (port, protocol, or host don't match)", function() {
+      expect(isCrossOrigin("https://google.com")).toBe(true)
+      expect(isCrossOrigin("https://localhost/foobar")).toBe(true)
+      expect(isCrossOrigin("http://localhost:12345/fizzbuzz.html")).toBe(true)
+      // ignore this when running on PhantomJS
+      if (location.protocol != "file:")
+        expect(isCrossOrigin(location.href)).toBe(false)
+    })
+  })
+
+  describe("matchesSelector", function() {
+    var matchesSelector = HTMLInspector.utils.matchesSelector
+    it("returns true if a DOM element matches a particular selector", function() {
+      var div = document.createElement("div")
+      div.setAttribute("foo", "FOO")
+      expect(matchesSelector(div, "div[foo]")).toBe(true)
+      expect(matchesSelector(div, "div[bar]")).toBe(false)
+
+      expect(matchesSelector(document.body, "html > body")).toBe(true)
+      expect(matchesSelector(document.body, ".body")).toBe(false)
+
+      div.innerHTML = "<p id='foo'>foo <em>bar</em></p>"
+      expect(matchesSelector(div.querySelector("em"), "#foo > em")).toBe(true)
+      expect(matchesSelector(div.querySelector("em"), "#foo")).toBe(false)
+    })
+
+  })
+
+  describe("matches", function() {
+    var matches = HTMLInspector.utils.matches
+    it("returns true if a DOM element matches any of the elements or selectors in the test object", function() {
+
+      var div = document.createElement("div")
+      div.setAttribute("foo", "FOO")
+      expect(matches(div, "div[foo]")).toBe(true)
+      expect(matches(div, "div[bar]")).toBe(false)
+
+      expect(matches(document.body, ["html", "html > body"])).toBe(true)
+      expect(matches(document.body, [".body", ".html", "p"])).toBe(false)
+
+      div.innerHTML = "<p id='foo'>foo <em>bar</em></p>"
+      expect(matches(div.querySelector("em"), ["#foo", "#foo > em"])).toBe(true)
+      expect(matches(div.querySelector("em"), [document.documentElement, document.body])).toBe(false)
+
+      expect(matches(div.querySelector("em"), ["#foo", "#foo > em"])).toBe(true)
+
+      expect(matches(div, null)).toBe(false)
+    })
+  })
+
+  describe("parents", function() {
+    var parents = HTMLInspector.utils.parents
+    it("returns an array of all the parent elements of the passed DOM element", function() {
+      var rents
+        , div = document.createElement("div")
+      expect(parents(div)).toEqual([])
+
+      div.innerHTML = "<p id='foo'><span>foo <em>bar</em><span></p>"
+      rents = parents(div.querySelector("em"))
+      expect(rents.length).toBe(3)
+      expect(rents[0].nodeName.toLowerCase()).toBe("span")
+      expect(rents[1].nodeName.toLowerCase()).toBe("p")
+      expect(rents[2]).toBe(div)
+
+      expect(parents(document.querySelector("body > *")).length).toBe(2)
+      expect(parents(document.querySelector("body > *"))[0]).toBe(document.body)
+      expect(parents(document.querySelector("body > *"))[1]).toBe(document.documentElement)
+
+    })
   })
 
 })
@@ -366,7 +629,7 @@ describe("css", function() {
 
   var css = HTMLInspector.modules.css
     , originalStyleSheets = css.styleSheets
-    , classes = ["alpha", "bar", "bravo", "charlie", "delta", "echo", "foo"]
+    , classes = ["alpha", "bar", "bravo", "charlie", "delta", "echo", "foo", "importee", "importer"]
 
   afterEach(function() {
     css.styleSheets = originalStyleSheets
@@ -389,24 +652,39 @@ describe("css", function() {
 
   it("can include both <link> and <style> elements", function() {
     var extraClasses = classes.concat(["style", "fizz", "buzz"]).sort()
-    // first remove any style tags browser modules might be putting in
-    $("style").remove()
-    $("head").append(""
-      + "<style id='style'>"
-      + ".style .foo, .style .bar { visiblility: visible }"
-      + ".style .fizz, .style .buzz { visiblility: visible }"
-      + "</style>"
-    )
+      , head = document.querySelector("head")
+      , styles = parseHTML(""
+          + "<style id='style'>"
+          + "  .style .foo, .style .bar { visiblility: visible }"
+          + "  .style .fizz, .style .buzz { visiblility: visible }"
+          + "</style>"
+        )
+
+    // first remove any style tags taht browser plugins might be putting in
+    Array.prototype.slice.call(document.querySelectorAll("style")).forEach(function(el) {
+      el.parentNode.removeChild(el)
+    })
+
+    head.appendChild(styles)
+
     css.styleSheets = "link[href$='-spec.css'], style"
     expect(css.getClassSelectors()).toEqual(extraClasses)
-    $("#style").remove()
+    head.removeChild(styles)
   })
 
 })
 
+
 describe("validation", function() {
 
   var validation = HTMLInspector.modules.validation
+    , originalElementWhitelist = validation.elementWhitelist
+    , originalAttributeWhitelist = validation.attributeWhitelist
+
+  afterEach(function() {
+    validation.elementWhitelist = originalElementWhitelist
+    validation.attributeWhitelist = originalAttributeWhitelist
+  })
 
   it("can determine if an element is a valid HTML element", function() {
     expect(validation.isElementValid("p")).toBe(true)
@@ -456,6 +734,39 @@ describe("validation", function() {
     expect(validation.getRequiredAttributesForElement("div")).toEqual([])
   })
 
+  it("can determine if a child elememnt is allowed inside it's parent", function() {
+    expect(validation.isChildAllowedInParent("div", "ul")).toBe(false)
+    expect(validation.isChildAllowedInParent("div", "span")).toBe(false)
+    expect(validation.isChildAllowedInParent("section", "em")).toBe(false)
+    expect(validation.isChildAllowedInParent("title", "body")).toBe(false)
+    expect(validation.isChildAllowedInParent("strong", "p")).toBe(true)
+    expect(validation.isChildAllowedInParent("li", "ol")).toBe(true)
+    expect(validation.isChildAllowedInParent("fieldset", "form")).toBe(true)
+    expect(validation.isChildAllowedInParent("td", "tr")).toBe(true)
+  })
+
+  it("ignores elements that are whitelisted", function() {
+    validation.elementWhitelist = validation.elementWhitelist.concat(["foo", "bar", "font", "center"])
+    // valid elements
+    expect(validation.isElementValid("foo")).toBe(true)
+    expect(validation.isElementValid("bar")).toBe(true)
+    // obsolete elements
+    expect(validation.isElementObsolete("font")).toBe(false)
+    expect(validation.isElementObsolete("center")).toBe(false)
+  })
+
+  it("ignores attributes that are whitelisted", function() {
+    validation.attributeWhitelist = validation.attributeWhitelist.concat(["src", "placeholder", "align", /^bg[a-z]+$/])
+    // valid elements
+    expect(validation.isAttributeValidForElement("placeholder", "select")).toBe(true)
+    expect(validation.isAttributeValidForElement("ng-model", "div")).toBe(true)
+    // obsolete elements
+    expect(validation.isAttributeObsoleteForElement("align", "div")).toBe(false)
+    expect(validation.isAttributeObsoleteForElement("bgcolor", "body")).toBe(false)
+    // required attributes
+    expect(validation.isAttributeRequiredForElement("src", "img")).toBe(false)
+
+  })
 
 })
 
@@ -464,14 +775,14 @@ describe("validation", function() {
 describe("Rules", function() {
 
   it("can add a new rule", function() {
-    HTMLInspector.rules.add("new-rule", $.noop)
+    HTMLInspector.rules.add("new-rule", no.op)
     expect(HTMLInspector.rules["new-rule"]).toBeDefined()
     ;delete HTMLInspector.rules["new-rule"]
   })
 
   it("can extend an existing rule with an options object", function() {
     var config = {foo: "bar"}
-    HTMLInspector.rules.add("new-rule", config, $.noop)
+    HTMLInspector.rules.add("new-rule", config, no.op)
     HTMLInspector.rules.extend("new-rule", {fizz: "buzz"})
     expect(HTMLInspector.rules["new-rule"].config).toEqual({foo:"bar", fizz:"buzz"})
     ;delete HTMLInspector.rules["new-rule"]
@@ -479,7 +790,7 @@ describe("Rules", function() {
 
   it("can extend an existing rule with a function that returns an options object", function() {
     var config = {list: [1]}
-    HTMLInspector.rules.add("new-rule", config, $.noop)
+    HTMLInspector.rules.add("new-rule", config, no.op)
     HTMLInspector.rules.extend("new-rule", function(config) {
       config.list.push(2)
       return config
@@ -598,7 +909,7 @@ describe("bem-conventions", function() {
   })
 
   it("warns when a BEM element class is used when not the descendent of a block", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="BlockOne SomeOtherBlock">'
           + '  <p class="BlockTwo-element">Foo</p>'
           + '  <p>Bar <em class="BlockThree-elementName">three</em></p>'
@@ -606,18 +917,18 @@ describe("bem-conventions", function() {
         )
     HTMLInspector.inspect({
       useRules: ["bem-conventions"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(2)
     expect(log[0].message).toBe("The BEM element 'BlockTwo-element' must be a descendent of 'BlockTwo'.")
     expect(log[1].message).toBe("The BEM element 'BlockThree-elementName' must be a descendent of 'BlockThree'.")
-    expect(log[0].context).toBe($html.find(".BlockTwo-element")[0])
-    expect(log[1].context).toBe($html.find(".BlockThree-elementName")[0])
+    expect(log[0].context).toBe(html.querySelector(".BlockTwo-element"))
+    expect(log[1].context).toBe(html.querySelector(".BlockThree-elementName"))
   })
 
   it("doesn't warn when a BEM element class is used as the descendent of a block", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="BlockThree BlockTwo SomeOtherBlock">'
           + '  <p class="BlockTwo-element">Foo</p>'
           + '  <p>Bar <em class="BlockThree-elementName">three</em></p>'
@@ -625,14 +936,14 @@ describe("bem-conventions", function() {
         )
     HTMLInspector.inspect({
       useRules: ["bem-conventions"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(0)
   })
 
   it("warns when a BEM modifier class is used without the unmodified block or element class", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="BlockOne--active">'
           + '  <p class="BlockTwo--validName BlockThree SomeOtherBlock">Foo</p>'
           + '  <p class="Block-element--modified">Bar</p>'
@@ -640,20 +951,20 @@ describe("bem-conventions", function() {
         )
     HTMLInspector.inspect({
       useRules: ["bem-conventions"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(3)
     expect(log[0].message).toBe("The BEM modifier class 'BlockOne--active' was found without the unmodified class 'BlockOne'.")
-    expect(log[0].context).toBe($html[0])
+    expect(log[0].context).toBe(html)
     expect(log[1].message).toBe("The BEM modifier class 'BlockTwo--validName' was found without the unmodified class 'BlockTwo'.")
-    expect(log[1].context).toBe($html.find(".BlockTwo--validName")[0])
+    expect(log[1].context).toBe(html.querySelector(".BlockTwo--validName"))
     expect(log[2].message).toBe("The BEM modifier class 'Block-element--modified' was found without the unmodified class 'Block-element'.")
-    expect(log[2].context).toBe($html.find(".Block-element--modified")[0])
+    expect(log[2].context).toBe(html.querySelector(".Block-element--modified"))
   })
 
   it("doesn't warn when a BEM modifier is used along with the unmodified block or element class", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="BlockOne BlockOne--active">'
           + '  <p class="BlockTwo BlockTwo--validName SomeOtherBlock">Foo</p>'
           + '  <p>Bar</p>'
@@ -661,14 +972,14 @@ describe("bem-conventions", function() {
         )
     HTMLInspector.inspect({
       useRules: ["bem-conventions"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(0)
   })
 
   it("allows for customization by altering the config object", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="block-one">'
           + '  <p class="block-two---valid-name">Foo</p>'
           + '  <p class="block-three___element-name">Bar</p>'
@@ -682,7 +993,7 @@ describe("bem-conventions", function() {
     })
     HTMLInspector.inspect({
       useRules: ["bem-conventions"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(2)
@@ -704,29 +1015,29 @@ describe("duplicate-ids", function() {
   }
 
   it("warns when the same ID attribute is used more than once", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div id="foobar">'
           + '  <p id="foobar">Foo</p>'
-          + '  <p id="barfoo">Bar <em id="barfoo">Em</em></p>'
+          + '  <p id="barfoo">bar <em id="barfoo">Em</em></p>'
           + '</div>'
         )
 
     HTMLInspector.inspect({
       useRules: ["duplicate-ids"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(2)
     expect(log[0].message).toBe("The id 'foobar' appears more than once in the document.")
     expect(log[1].message).toBe("The id 'barfoo' appears more than once in the document.")
-    expect(log[0].context).toEqual([$html[0], $html.find("p#foobar")[0]])
-    expect(log[1].context).toEqual([$html.find("p#barfoo")[0], $html.find("em#barfoo")[0]])
+    expect(log[0].context).toEqual([html, html.querySelector("p#foobar")])
+    expect(log[1].context).toEqual([html.querySelector("p#barfoo"), html.querySelector("em#barfoo")])
 
   })
 
   it("doesn't warn when all ids are unique", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div id="foobar1">'
           + '  <p id="foobar2">Foo</p>'
           + '  <p id="barfoo1">Bar <em id="barfoo2">Em</em></p>'
@@ -735,7 +1046,7 @@ describe("duplicate-ids", function() {
 
     HTMLInspector.inspect({
       useRules: ["duplicate-ids"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
@@ -757,7 +1068,7 @@ describe("inline-event-handlers", function() {
   }
 
   it("warns when inline event handlers are found on elements", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div onresize="alert(\'bad!\')">'
           + '  <p>Foo</p>'
           + '  <p>Bar <a href="#" onclick="alert(\'bad!\')">click me</em></p>'
@@ -766,20 +1077,20 @@ describe("inline-event-handlers", function() {
 
     HTMLInspector.inspect({
       useRules: ["inline-event-handlers"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(2)
     expect(log[0].message).toBe("An 'onresize' attribute was found in the HTML. Use external scripts for event binding instead.")
     expect(log[1].message).toBe("An 'onclick' attribute was found in the HTML. Use external scripts for event binding instead.")
-    expect(log[0].context).toEqual($html[0])
-    expect(log[1].context).toEqual($html.find("a")[0])
+    expect(log[0].context).toEqual(html)
+    expect(log[1].context).toEqual(html.querySelector("a"))
 
   })
 
   it("doesn't warn there are no inline event handlers", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <p>Foo</p>'
           + '  <p>Bar <a href="#">click me</em></p>'
@@ -788,81 +1099,11 @@ describe("inline-event-handlers", function() {
 
     HTMLInspector.inspect({
       useRules: ["inline-event-handlers"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(0)
-  })
-
-})
-
-
-describe("scoped-styles", function() {
-
-  var log
-
-  function onComplete(reports) {
-    log = []
-    reports.forEach(function(report) {
-      log.push(report)
-    })
-  }
-
-  it("warns when style elements outside of the head do not declare the scoped attribute", function() {
-    var $html = $(''
-          + '<section>'
-          + '  <style> .foo { } </style>'
-          + '</section>'
-        )
-
-    HTMLInspector.inspect({
-      useRules: ["scoped-styles"],
-      domRoot: $html,
-      onComplete: onComplete
-    })
-
-    expect(log.length).toBe(1)
-    expect(log[0].message).toBe("<style> elements outside of <head> must declare the 'scoped' attribute.")
-    expect(log[0].context).toBe($html.find("style")[0])
-
-  })
-
-  it("doesn't warns when style elements outside of the head declare the scoped attribute", function() {
-    var $html = $(''
-          + '<section>'
-          + '  <style scoped> .foo { } </style>'
-          + '</section>'
-        )
-
-    HTMLInspector.inspect({
-      useRules: ["scoped-styles"],
-      domRoot: $html,
-      onComplete: onComplete
-    })
-
-    expect(log.length).toBe(0)
-
-  })
-
-  it("doesn't warns when style elements are inside the head", function() {
-    var $html = $(''
-          + '<html>'
-          + '  <head>'
-          + '    <style scoped> .foo { } </style>'
-          + '  </head>'
-          + '  <body></body>'
-          + '</html>'
-        )
-
-    HTMLInspector.inspect({
-      useRules: ["scoped-styles"],
-      domRoot: $html,
-      onComplete: onComplete
-    })
-
-    expect(log.length).toBe(0)
-
   })
 
 })
@@ -887,70 +1128,94 @@ describe("script-placement", function() {
     expect(log.length).toBeGreaterThan(0)
     log.forEach(function(error, i) {
       expect(log[i].message).toBe("<script> elements should appear right before the closing </body> tag for optimal performance.")
-      expect($(log[i].context).is("script")).toBe(true)
+      expect(log[i].context.nodeName.toLowerCase()).toBe("script")
     })
 
-    $html = $(''
-      + '<div>'
-      + '  <script id="script1">(function() { // script one }())</script>'
-      + '  <header>Header content</header>'
-      + '  <main>Main content</main>'
-      + '  <footer>Footer content</header>'
-      + '  <script id="script2">(function() { // script two }())</script>'
-      + '  <script id="script3">(function() { // script three }())</script>'
-      + '</div>'
-    )
+    var body = document.createElement("body")
+    body.appendChild(parseHTML('<script id="script1">(function() { // script one }())</script>'))
+    body.appendChild(parseHTML('<header>Header content</header>'))
+    body.appendChild(parseHTML('<main>Main content</main>'))
+    body.appendChild(parseHTML('<footer>Footer content</footer>'))
+    body.appendChild(parseHTML('<script id="script2">(function() { // script two }())</script>'))
+    body.appendChild(parseHTML('<script id="script3">(function() { // script three }())</script>'))
+
+    // Make sure the scripts aren't async or defer
+    Array.prototype.slice.call(body.querySelectorAll("script")).forEach(function(script) {
+      script.async = false
+      script.defer = false
+    })
+
     HTMLInspector.inspect({
       useRules: ["script-placement"],
-      domRoot: $html,
+      domRoot: body,
       onComplete: onComplete
     })
+
     expect(log.length).toBe(1)
     expect(log[0].message).toBe("<script> elements should appear right before the closing </body> tag for optimal performance.")
-    expect(log[0].context).toBe($html.find("#script1")[0])
+    expect(log[0].context).toBe(body.querySelector("#script1"))
   })
 
   it("doesn't warn when script tags are the last traversed element", function() {
-    var $html = $(''
-          + '<div>'
-          + '  <header>Header content</header>'
-          + '  <main>Main content</main>'
-          + '  <footer>Footer content</header>'
-          + '  <script id="script1">(function() { // script one }())</script>'
-          + '  <script id="script2">(function() { // script two }())</script>'
-          + '</div>'
-        )
+    var body = document.createElement("body")
+    body.appendChild(parseHTML('<header>Header content</header>'))
+    body.appendChild(parseHTML('<main>Main content</main>'))
+    body.appendChild(parseHTML('<footer>Footer content</header>'))
+    body.appendChild(parseHTML('<script id="script1">(function() { // script one }())</script>'))
+    body.appendChild(parseHTML('<script id="script2">(function() { // script two }())</script>'))
+
     HTMLInspector.inspect({
       useRules: ["script-placement"],
-      domRoot: $html,
+      domRoot: body,
       onComplete: onComplete
     })
     expect(log.length).toBe(0)
   })
 
+  it("doesn't warn when the script uses either the async or defer attribute", function() {
+    var body = document.createElement("body")
+    body.appendChild(parseHTML('<script id="script1" async>(function() { // script one }())</script>'))
+    body.appendChild(parseHTML('<script id="script2" defer>(function() { // script two }())</script>'))
+    body.appendChild(parseHTML('<header>Header content</header>'))
+    body.appendChild(parseHTML('<main>Main content</main>'))
+    body.appendChild(parseHTML('<footer>Footer content</header>'))
+
+    HTMLInspector.inspect({
+      useRules: ["script-placement"],
+      domRoot: body,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(0)
+
+  })
+
   it("allows for customization by altering the config object", function() {
-    var $html = $(''
-          + '<div>'
-          + '  <script id="script1">(function() { // script one }())</script>'
-          + '  <script id="script2">(function() { // script two }())</script>'
-          + '  <header>Header content</header>'
-          + '  <main>Main content</main>'
-          + '  <footer>Footer content</header>'
-          + '  <script id="script3">(function() { // script three }())</script>'
-          + '</div>'
-        )
+    var body = document.createElement("body")
+    body.appendChild(parseHTML('<script id="script1">(function() { // script one }())</script>'))
+    body.appendChild(parseHTML('<script id="script2">(function() { // script two }())</script>'))
+    body.appendChild(parseHTML('<header>Header content</header>'))
+    body.appendChild(parseHTML('<main>Main content</main>'))
+    body.appendChild(parseHTML('<footer>Footer content</header>'))
+    body.appendChild(parseHTML('<script id="script3">(function() { // script three }())</script>'))
+
+    // Make sure the scripts aren't async or defer
+    Array.prototype.slice.call(body.querySelectorAll("script")).forEach(function(script) {
+      script.async = false
+      script.defer = false
+    })
+
     // whitelist #script1
     HTMLInspector.rules.extend("script-placement", {
       whitelist: "#script1"
     })
     HTMLInspector.inspect({
       useRules: ["script-placement"],
-      domRoot: $html,
+      domRoot: body,
       onComplete: onComplete
     })
     expect(log.length).toBe(1)
     expect(log[0].message).toBe("<script> elements should appear right before the closing </body> tag for optimal performance.")
-    expect(log[0].context).toBe($html.find("#script2")[0])
+    expect(log[0].context).toBe(body.querySelector("#script2"))
 
     // whitelist #script1 and #script2
     HTMLInspector.rules.extend("script-placement", {
@@ -958,7 +1223,7 @@ describe("script-placement", function() {
     })
     HTMLInspector.inspect({
       useRules: ["script-placement"],
-      domRoot: $html,
+      domRoot: body,
       onComplete: onComplete
     })
     expect(log.length).toBe(0)
@@ -977,7 +1242,7 @@ describe("unique-elements", function() {
   }
 
   it("warns when single-use elements appear on the page more than once", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <div>'
           + '    <title>Foobar</title>'
@@ -995,18 +1260,18 @@ describe("unique-elements", function() {
         )
     HTMLInspector.inspect({
       useRules: ["unique-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(2)
     expect(log[0].message).toBe("The <title> element may only appear once in the document.")
     expect(log[1].message).toBe("The <main> element may only appear once in the document.")
-    expect(log[0].context).toEqual([$html.find("title")[0], $html.find("title")[1]])
-    expect(log[1].context).toEqual([$html.find("main")[0], $html.find("main")[1]])
+    expect(log[0].context).toEqual([html.querySelector("title"), html.querySelectorAll("title")[1]])
+    expect(log[1].context).toEqual([html.querySelector("main"), html.querySelectorAll("main")[1]])
   })
 
   it("doesn't warn when single-use elements appear on the page only once", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<html>'
           + '  <head>'
           + '    <title>Foobar</title>'
@@ -1020,14 +1285,14 @@ describe("unique-elements", function() {
         )
     HTMLInspector.inspect({
       useRules: ["unique-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(0)
   })
 
   it("allows for customization by altering the config object", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <div>'
           + '    <title>Foobar</title>'
@@ -1048,14 +1313,14 @@ describe("unique-elements", function() {
     })
     HTMLInspector.inspect({
       useRules: ["unique-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(2)
     expect(log[0].message).toBe("The <header> element may only appear once in the document.")
     expect(log[1].message).toBe("The <footer> element may only appear once in the document.")
-    expect(log[0].context).toEqual([$html.find("header")[0], $html.find("header")[1]])
-    expect(log[1].context).toEqual([$html.find("footer")[0], $html.find("footer")[1]])
+    expect(log[0].context).toEqual([html.querySelector("header"), html.querySelectorAll("header")[1]])
+    expect(log[1].context).toEqual([html.querySelector("footer"), html.querySelectorAll("footer")[1]])
   })
 })
 
@@ -1071,7 +1336,7 @@ describe("unnecessary-elements", function() {
   }
 
   it("warns when unattributed <div> or <span> elements appear in the HTML", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <span>Foo</span>'
           + '  <p>Foo</p>'
@@ -1081,7 +1346,7 @@ describe("unnecessary-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["unnecessary-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
@@ -1089,14 +1354,14 @@ describe("unnecessary-elements", function() {
     expect(log[0].message).toBe("Do not use <div> or <span> elements without any attributes.")
     expect(log[1].message).toBe("Do not use <div> or <span> elements without any attributes.")
     expect(log[2].message).toBe("Do not use <div> or <span> elements without any attributes.")
-    expect(log[0].context).toBe($html[0])
-    expect(log[1].context).toBe($html.find("span")[0])
-    expect(log[2].context).toBe($html.find("div")[0])
+    expect(log[0].context).toBe(html)
+    expect(log[1].context).toBe(html.querySelector("span"))
+    expect(log[2].context).toBe(html.querySelector("div"))
 
   })
 
   it("doesn't warn when attributed <div> or <span> elements appear in the HTML", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div data-foo="bar">'
           + '  <span class="alert">Foo</span>'
           + '  <p>Foo</p>'
@@ -1106,18 +1371,18 @@ describe("unnecessary-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["unnecessary-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(1)
     expect(log[0].message).toBe("Do not use <div> or <span> elements without any attributes.")
-    expect(log[0].context).toBe($html.find("div")[0])
+    expect(log[0].context).toBe(html.querySelector("div"))
 
   })
 
   it("doesn't warn when unattributed, semantic elements appear in the HTML", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<section data-foo="bar">'
           + '  <h1>Foo</h1>'
           + '  <p>Foo</p>'
@@ -1126,7 +1391,7 @@ describe("unnecessary-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["unnecessary-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
@@ -1135,7 +1400,7 @@ describe("unnecessary-elements", function() {
   })
 
   it("allows for customization by altering the config object", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <h1>Foo</h1>'
           + '  <span>Foo</span>'
@@ -1148,11 +1413,11 @@ describe("unnecessary-elements", function() {
     })
     HTMLInspector.inspect({
       useRules: ["unnecessary-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
     expect(log.length).toBe(1)
-    expect(log[0].context).toBe($html.find("span")[0])
+    expect(log[0].context).toBe(html.querySelector("span"))
 
   })
 
@@ -1171,7 +1436,7 @@ describe("unused-classes", function() {
   }
 
   it("warns when non-whitelisted classes appear in the HTML but not in any stylesheet", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="fizz buzz">'
           + '  <p class="foo bar baz">This is just a test</p>'
           + '</div>'
@@ -1179,21 +1444,21 @@ describe("unused-classes", function() {
 
     HTMLInspector.inspect({
       useRules: ["unused-classes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log[0].message).toBe("The class 'fizz' is used in the HTML but not found in any stylesheet.")
     expect(log[1].message).toBe("The class 'buzz' is used in the HTML but not found in any stylesheet.")
     expect(log[2].message).toBe("The class 'baz' is used in the HTML but not found in any stylesheet.")
-    expect(log[0].context).toBe($html[0])
-    expect(log[1].context).toBe($html[0])
-    expect(log[2].context).toBe($html.find("p")[0])
+    expect(log[0].context).toBe(html)
+    expect(log[1].context).toBe(html)
+    expect(log[2].context).toBe(html.querySelector("p"))
 
   })
 
   it("doesn't warn when whitelisted classes appear in the HTML", function() {
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="supports-flexbox">'
           + '  <p class="js-alert">This is just a test</p>'
           + '</div>'
@@ -1201,7 +1466,7 @@ describe("unused-classes", function() {
 
     HTMLInspector.inspect({
       useRules: ["unused-classes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
@@ -1211,17 +1476,32 @@ describe("unused-classes", function() {
 
   it("allows for customization by altering the config object", function() {
 
-    var $html = $(''
-          + '<div class="foo supports-flexbox">'
-          + '  <p class="js-alert bar">This is just a test</p>'
+    var html = parseHTML(''
+          + '<div class="fizz supports-flexbox">'
+          + '  <p class="js-alert buzz">This is just a test</p>'
           + '</div>'
         )
 
-    HTMLInspector.rules.extend("unused-classes", {whitelist: /foo|bar/})
+    // the whitelist can be a single RegExp
+    HTMLInspector.rules.extend("unused-classes", {whitelist: /fizz|buzz/})
 
     HTMLInspector.inspect({
       useRules: ["unused-classes"],
-      domRoot: $html,
+      domRoot: html,
+      onComplete: onComplete
+    })
+
+    expect(log.length).toBe(2)
+    expect(log[0].message).toBe("The class 'supports-flexbox' is used in the HTML but not found in any stylesheet.")
+    expect(log[1].message).toBe("The class 'js-alert' is used in the HTML but not found in any stylesheet.")
+
+    log = []
+    // It can also be a list of strings or RegExps
+    HTMLInspector.rules.extend("unused-classes", {whitelist: ["fizz", /buz\w/]})
+
+    HTMLInspector.inspect({
+      useRules: ["unused-classes"],
+      domRoot: html,
       onComplete: onComplete
     })
 
@@ -1247,7 +1527,7 @@ describe("validate-attributes", function() {
 
   it("warns when obsolete attributes of elements appear in the HTML", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div align="center">'
           + '  <section>'
           + '     <h1>Title</h1>'
@@ -1263,27 +1543,27 @@ describe("validate-attributes", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-attributes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(5)
     expect(log[0].message).toBe("The 'align' attribute is no longer valid on the <div> element and should not be used.")
-    expect(log[0].context).toBe($html[0])
+    expect(log[0].context).toBe(html)
     expect(log[1].message).toBe("The 'align' attribute is no longer valid on the <h2> element and should not be used.")
-    expect(log[1].context).toBe($html.find("h2")[0])
+    expect(log[1].context).toBe(html.querySelector("h2"))
     expect(log[2].message).toBe("The 'clear' attribute is no longer valid on the <br> element and should not be used.")
-    expect(log[2].context).toBe($html.find("br")[0])
+    expect(log[2].context).toBe(html.querySelector("br"))
     expect(log[3].message).toBe("The 'color' attribute is no longer valid on the <hr> element and should not be used.")
-    expect(log[3].context).toBe($html.find("hr")[0])
+    expect(log[3].context).toBe(html.querySelector("hr"))
     expect(log[4].message).toBe("The 'type' attribute is no longer valid on the <ul> element and should not be used.")
-    expect(log[4].context).toBe($html.find("ul")[0])
+    expect(log[4].context).toBe(html.querySelector("ul"))
 
   })
 
   it("warns when invalid attributes of elements appear in the HTML", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div foo="bar">'
           + '  <section action="http://example.com">'
           + '     <h1>Title</h1>'
@@ -1295,25 +1575,25 @@ describe("validate-attributes", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-attributes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(4)
     expect(log[0].message).toBe("'foo' is not a valid attribute of the <div> element.")
-    expect(log[0].context).toBe($html[0])
+    expect(log[0].context).toBe(html)
     expect(log[1].message).toBe("'action' is not a valid attribute of the <section> element.")
-    expect(log[1].context).toBe($html.find("section")[0])
+    expect(log[1].context).toBe(html.querySelector("section"))
     expect(log[2].message).toBe("'cell-padding' is not a valid attribute of the <h2> element.")
-    expect(log[2].context).toBe($html.find("h2")[0])
+    expect(log[2].context).toBe(html.querySelector("h2"))
     expect(log[3].message).toBe("'blah' is not a valid attribute of the <br> element.")
-    expect(log[3].context).toBe($html.find("br")[0])
+    expect(log[3].context).toBe(html.querySelector("br"))
 
   })
 
   it("warns when required attributes are missing", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <img class="foo" />'
           + '  <form>'
@@ -1324,27 +1604,27 @@ describe("validate-attributes", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-attributes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(5)
     expect(log[0].message).toBe("The 'alt' attribute is required for <img> elements.")
-    expect(log[0].context).toBe($html.find("img")[0])
+    expect(log[0].context).toBe(html.querySelector("img"))
     expect(log[1].message).toBe("The 'src' attribute is required for <img> elements.")
-    expect(log[1].context).toBe($html.find("img")[0])
+    expect(log[1].context).toBe(html.querySelector("img"))
     expect(log[2].message).toBe("The 'action' attribute is required for <form> elements.")
-    expect(log[2].context).toBe($html.find("form")[0])
+    expect(log[2].context).toBe(html.querySelector("form"))
     expect(log[3].message).toBe("The 'cols' attribute is required for <textarea> elements.")
-    expect(log[3].context).toBe($html.find("textarea")[0])
+    expect(log[3].context).toBe(html.querySelector("textarea"))
     expect(log[4].message).toBe("The 'rows' attribute is required for <textarea> elements.")
-    expect(log[4].context).toBe($html.find("textarea")[0])
+    expect(log[4].context).toBe(html.querySelector("textarea"))
 
   })
 
-  it("doesn't double-warn when an element is both invalid and obsolete", function() {
+  it("doesn't double-warn when an attribute is both invalid and obsolete", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div align="center">'
           + '   <h1>Title</h1>'
           + '   <h2>Subtitle</h2>'
@@ -1353,16 +1633,34 @@ describe("validate-attributes", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-attributes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(1)
   })
 
+  it("doesn't warn about invalid attributes if the element containing the attribute is invalid", function() {
+
+    var html = parseHTML(''
+          + '<div>'
+          + '  <foo bar></foo>'
+          + '  <fizz buzz="true"></fizz>'
+          + '</div>'
+        )
+
+    HTMLInspector.inspect({
+      useRules: ["validate-attributes"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+
+    expect(log.length).toBe(0)
+  })
+
   it("doesn't warn when valid, non-obsolete elements are used", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div class="foo" data-foo="bar" role="main">'
           + '  <span id="bar">Foo</span>'
           + '  <a aria-foo="bar" href="#">Foo</a>'
@@ -1371,12 +1669,174 @@ describe("validate-attributes", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-attributes"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(0)
 
+  })
+
+
+})
+
+describe("validate-element-location", function() {
+
+  var log
+
+  function onComplete(reports) {
+    log = []
+    reports.forEach(function(report) {
+      log.push(report)
+    })
+  }
+
+  it("warns when elements appear as children of parent elements they're not allow to be within", function() {
+
+    var html = parseHTML(''
+          + '<div>'
+          + '  <h1>This is a <p>Heading!</p> shit</h1>'
+          + '  <span>'
+          + '    <ul>'
+          + '      <li>foo</li>'
+          + '    </ul>'
+          + '  </span>'
+          + '  <ul>'
+          + '    <span><li>Foo</li></span>'
+          + '    <li>Bar</li>'
+          + '  </ul>'
+          + '  <p>This is a <title>title</title> element</p>'
+          + '  <em><p>emphasize!</p></em>'
+          + '</div>'
+        )
+
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+
+    expect(log.length).toBe(6)
+    expect(log[0].message).toBe("The <p> element cannot be a child of the <h1> element.")
+    expect(log[0].context).toBe(html.querySelector("h1 > p"))
+    expect(log[1].message).toBe("The <ul> element cannot be a child of the <span> element.")
+    expect(log[1].context).toBe(html.querySelector("span > ul"))
+    expect(log[2].message).toBe("The <span> element cannot be a child of the <ul> element.")
+    expect(log[2].context).toBe(html.querySelector("ul > span"))
+    expect(log[3].message).toBe("The <li> element cannot be a child of the <span> element.")
+    expect(log[3].context).toBe(html.querySelector("span > li"))
+    expect(log[4].message).toBe("The <title> element cannot be a child of the <p> element.")
+    expect(log[4].context).toBe(html.querySelector("p > title"))
+    expect(log[5].message).toBe("The <p> element cannot be a child of the <em> element.")
+    expect(log[5].context).toBe(html.querySelector("em > p"))
+  })
+
+  it("doesn't warn when elements appear as children of parents they're allowed to be within", function() {
+    var html = parseHTML(''
+          + '<div>'
+          + '  <h1>This is a <strong>Heading!</strong> shit</h1>'
+          + '  <p><a href="#"><span></span></a><p>'
+          + '  <ol><li><p>li</p></li></ol>'
+          + '  <section>'
+          + '    <article><h1>Blah</h1><p>This is some text</p></article>'
+          + '  </section>'
+          + '</div>'
+        )
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(0)
+  })
+
+  it("warns when <style> elements inside body do not declare the scoped attribute", function() {
+    var html = document.createElement("body")
+    html.innerHTML = '<section><style> .foo { } </style></section>'
+
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(1)
+    expect(log[0].message).toBe("<style> elements inside <body> must contain the 'scoped' attribute.")
+    expect(log[0].context).toBe(html.querySelector("style"))
+  })
+
+  it("doesn't warns when <style> elements are inside the head", function() {
+    var html = parseHTML(''
+          + '<html>'
+          + '  <head>'
+          + '    <style scoped> .foo { } </style>'
+          + '  </head>'
+          + '  <body></body>'
+          + '</html>'
+        )
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(0)
+  })
+
+  it("warns when <style> elements inside body declare the scoped attribute but are not the first child of their parent", function() {
+    var html = document.createElement("body")
+    html.innerHTML = '<section><span>alert</span><style scoped> .foo { } </style></section>'
+
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(1)
+    expect(log[0].message).toBe("Scoped <style> elements must be the first child of their parent element.")
+    expect(log[0].context).toBe(html.querySelector("style"))
+  })
+
+  it("doesn't warns when <style scoped> elements are the first child of their parent", function() {
+    var html = document.createElement("body")
+    html.innerHTML = '<section><style scoped> .foo { } </style></section>'
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(0)
+  })
+
+  it("warns when <link> and <meta> elements inside body do not declare the itemprop attribute", function() {
+    var html = document.createElement("body")
+    html.innerHTML = '<meta charset="utf-8"><link rel="imports" href="component.html">'
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(2)
+    expect(log[0].message).toBe("<meta> elements inside <body> must contain the 'itemprop' attribute.")
+    expect(log[0].context).toBe(html.querySelector("meta"))
+    expect(log[1].message).toBe("<link> elements inside <body> must contain the 'itemprop' attribute.")
+    expect(log[1].context).toBe(html.querySelector("link"))
+  })
+
+  it("doesn't warns when <link> and <meta> elements are inside the head", function() {
+    var html = parseHTML(''
+          + '<html>'
+          + '  <head>'
+          + '    <meta charset="utf-8">'
+          + '    <link rel="imports" href="component.html">'
+          + '  </head>'
+          + '  <body></body>'
+          + '</html>'
+        )
+    HTMLInspector.inspect({
+      useRules: ["validate-element-location"],
+      domRoot: html,
+      onComplete: onComplete
+    })
+    expect(log.length).toBe(0)
   })
 
 })
@@ -1394,7 +1854,7 @@ describe("validate-elements", function() {
 
   it("warns when obsolete elements appear in the HTML", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <hgroup>'
           + '     <h1>Title</h1>'
@@ -1407,23 +1867,23 @@ describe("validate-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(3)
     expect(log[0].message).toBe("The <hgroup> element is obsolete and should not be used.")
-    expect(log[0].context).toBe($html.find("hgroup")[0])
+    expect(log[0].context).toBe(html.querySelector("hgroup"))
     expect(log[1].message).toBe("The <tt> element is obsolete and should not be used.")
-    expect(log[1].context).toBe($html.find("tt")[0])
+    expect(log[1].context).toBe(html.querySelector("tt"))
     expect(log[2].message).toBe("The <center> element is obsolete and should not be used.")
-    expect(log[2].context).toBe($html.find("center")[0])
+    expect(log[2].context).toBe(html.querySelector("center"))
 
   })
 
   it("warns when invalid elements appear in the HTML", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <foo>'
           + '     <h1>Title</h1>'
@@ -1436,23 +1896,23 @@ describe("validate-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
     expect(log.length).toBe(3)
     expect(log[0].message).toBe("The <foo> element is not a valid HTML element.")
-    expect(log[0].context).toBe($html.find("foo")[0])
+    expect(log[0].context).toBe(html.querySelector("foo"))
     expect(log[1].message).toBe("The <bar> element is not a valid HTML element.")
-    expect(log[1].context).toBe($html.find("bar")[0])
+    expect(log[1].context).toBe(html.querySelector("bar"))
     expect(log[2].message).toBe("The <bogus> element is not a valid HTML element.")
-    expect(log[2].context).toBe($html.find("bogus")[0])
+    expect(log[2].context).toBe(html.querySelector("bogus"))
 
   })
 
   it("doesn't double-warn when an element is both invalid and obsolete", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<hgroup>'
           + '   <h1>Title</h1>'
           + '   <h2>Subtitle</h2>'
@@ -1461,7 +1921,7 @@ describe("validate-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 
@@ -1470,7 +1930,7 @@ describe("validate-elements", function() {
 
   it("doesn't warn when valid, non-obsolete elements are used", function() {
 
-    var $html = $(''
+    var html = parseHTML(''
           + '<div>'
           + '  <span>Foo</span>'
           + '  <p>Foo</p>'
@@ -1480,7 +1940,7 @@ describe("validate-elements", function() {
 
     HTMLInspector.inspect({
       useRules: ["validate-elements"],
-      domRoot: $html,
+      domRoot: html,
       onComplete: onComplete
     })
 

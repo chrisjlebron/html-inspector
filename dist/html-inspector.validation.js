@@ -39,37 +39,15 @@ HTMLInspector.rules.add("duplicate-ids", function(listener, reporter) {
 
 })
 
-HTMLInspector.rules.add("scoped-styles", function(listener, reporter) {
-
-  var elements = []
-
-  listener.on("element", function(name) {
-    var isOutsideHead
-      , isScoped
-    if (name == "style") {
-      isOutsideHead = !$(this).closest("head").length
-      isScoped = $(this).attr("scoped") != null
-      if (isOutsideHead && !isScoped) {
-        reporter.warn(
-          "scoped-styles",
-          "<style> elements outside of <head> must declare the 'scoped' attribute.",
-          this
-        )
-      }
-    }
-  })
-
-})
-
 HTMLInspector.rules.add(
   "unique-elements",
   {
     elements: ["title", "main"]
   },
-  function(listener, reporter) {
+  function(listener, reporter, config) {
 
     var map = {}
-      , elements = this.elements
+      , elements = config.elements
 
     // create the map where the keys are elements that must be unique
     elements.forEach(function(item) {
@@ -104,7 +82,7 @@ HTMLInspector.rules.add("validate-attributes", function(listener, reporter) {
   listener.on("element", function(name) {
     var required = validation.getRequiredAttributesForElement(name)
     required.forEach(function(attr) {
-      if ($(this).attr(attr) == null) {
+      if (!this.hasAttribute(attr)) {
         reporter.warn(
           "validate-attributes",
           "The '" + attr + "' attribute is required for <"
@@ -117,6 +95,10 @@ HTMLInspector.rules.add("validate-attributes", function(listener, reporter) {
 
   listener.on("attribute", function(name) {
     var element = this.nodeName.toLowerCase()
+
+    // don't validate the attributes of invalid elements
+    if (!validation.isElementValid(element)) return
+
     if (validation.isAttributeObsoleteForElement(name, element)) {
       reporter.warn(
         "validate-attributes",
@@ -136,6 +118,84 @@ HTMLInspector.rules.add("validate-attributes", function(listener, reporter) {
   })
 
 })
+
+HTMLInspector.rules.add("validate-element-location", function(listener, reporter) {
+
+  var validation = this.modules.validation
+    , matches = this.utils.matches
+    , parents = this.utils.parents
+    , warned = [] // store already-warned elements to prevent double warning
+
+
+  // ===========================================================================
+  // Elements with clear-cut location rules are tested here.
+  // More complicated cases are tested below
+  // ===========================================================================
+
+  listener.on("element", function(name) {
+    // skip elements without a DOM element for a parent
+    if (!(this.parentNode && this.parentNode.nodeType == 1)) return
+
+    var child = name
+      , parent = this.parentNode.nodeName.toLowerCase()
+
+    if (!validation.isChildAllowedInParent(child, parent)) {
+      warned.push(this)
+      reporter.warn(
+        "validate-element-location",
+        "The <" + child + "> element cannot be a child of the <" + parent + "> element.",
+        this
+      )
+    }
+  })
+
+  // ===========================================================================
+  // Make sure <style> elements inside <body> have the 'scoped' attribute.
+  // They must also be the first element child of their parent.
+  // ===========================================================================
+
+  listener.on("element", function(name) {
+    // don't double warn if the style elements already has a location warning
+    if (warned.indexOf(this) > -1) return
+
+    if (matches(this, "body style:not([scoped])")) {
+      reporter.warn(
+        "validate-element-location",
+        "<style> elements inside <body> must contain the 'scoped' attribute.",
+        this
+      )
+    }
+    else if (matches(this, "body style[scoped]:not(:first-child)")) {
+      reporter.warn(
+        "validate-element-location",
+        "Scoped <style> elements must be the first child of their parent element.",
+        this
+      )
+    }
+
+  })
+
+  // ===========================================================================
+  // Make sure <meta> and <link> elements inside <body> have the 'itemprop'
+  // attribute
+  // ===========================================================================
+
+  listener.on("element", function(name) {
+    // don't double warn if the style elements already has a location warning
+    if (warned.indexOf(this) > -1) return
+
+    if (matches(this, "body meta:not([itemprop]), body link:not([itemprop])")) {
+      reporter.warn(
+        "validate-element-location",
+        "<" + name + "> elements inside <body> must contain the"
+        + " 'itemprop' attribute.",
+        this
+      )
+    }
+  })
+
+})
+
 
 HTMLInspector.rules.add("validate-elements", function(listener, reporter) {
 

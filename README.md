@@ -1,13 +1,17 @@
 # HTML Inspector
 
+[![Build Status](https://secure.travis-ci.org/philipwalton/html-inspector.png)](http://travis-ci.org/philipwalton/html-inspector)
+
 1. [Getting Started](#getting-started)
 2. [Configuring HTML Inspector](#configuring-html-inspector)
 3. [Built-in Rules](#built-in-rules)
 4. [Writing Your Own Rules](#writing-your-own-rules)
 5. [Overriding Rules Configurations](#overriding-rule-configurations)
 6. [Custom Builds](#custom-builds)
-7. [Running the Tests](#running-the-tests)
-8. [Contributing](#contributing)
+7. [Browser Support](#browser-support)
+8. [Running the Tests](#running-the-tests)
+9. [Contributing](#contributing)
+10. [FAQs](#faqs)
 
 HTML Inspector is a highly-customizable, code quality tool to help you (and your team) write better markup. It aims to find a balance between the uncompromisingly strict W3C validator and having absolutely no rules at all (the unfortunate reality for most of us).
 
@@ -17,18 +21,23 @@ For a more formal introduction, please refer to [this blog post](http://philipwa
 
 ## Getting Started
 
-The easiest way get started is to simply download the source and add it to your page. [Bower](https://github.com/bower/bower) users can install HTML Inspector and its dependencies (just jQuery) with the following command:
+The easiest way to try out HTML Inspector is to link to the source file hosted on [CDNJS](http://cdnjs.com/):
+
+```html
+<script src="http://cdnjs.cloudflare.com/ajax/libs/html-inspector/0.4.0/html-inspector.js"></script>
+```
+
+Alternatively, [Bower](https://github.com/bower/bower) users can install HTML Inspector with the following command:
 
 ```sh
 bower install html-inspector
 ```
 
-Alternatively you can clone the repo and add the file at `dist/html-inspector.js` to your HTML *(and jQuery too if it's not already there)*.
+If you clone the Github repo, just use the file at `dist/html-inspector.js`.
 
-Once HTML Inspector is added, just run `HTMLInspector.inspect()` to see the results. Calling `inspect` with no options will load all rules and run them with their default configuration options.
+Once HTML Inspector is added, you can run `HTMLInspector.inspect()` to see the results. Calling `inspect` with no options will load all rules and run them with their default configuration options.
 
 ```html
-<!-- Include jQuery if it's not already loaded -->
 <script src="path/to/html-inspector.js"></script>
 <script> HTMLInspector.inspect() </script>
 ```
@@ -36,7 +45,7 @@ After the script runs, any errors will be reported to the console (unless you ch
 
 ![Sample HTML Inspector Output](https://raw.github.com/philipwalton/html-inspector/master/img/html-inspector-console.png)
 
-Make sure you call `inspect` after any other DOM altering scripts have finished running or those alterations won't get inspected.
+**Make sure you call `inspect` after any other DOM altering scripts have finished running or those alterations won't get inspected.**
 
 ## Configuring HTML Inspector
 
@@ -45,15 +54,35 @@ By default, HTML Inspector runs all added rules, starts traversing from the `<ht
 The `inspect` method takes a config object to allow you to change any of this behavior. Here are the config options:
 
 - **useRules**: (Array) a list of rule names to run when inspecting
-- **domRoot**: (selector | element | jQuery) the DOM element to start traversing from
+- **domRoot**: (selector | element) the DOM element to start traversing from
+- **exclude**: (selector | element | Array) any DOM element that matches the selector, element, or list of selectors/elements will be excluded from traversal (note: its descendants will still be traversed).
+- **excludeSubTree**: (selector } element | Array) the descendants of any DOM element that matches the selector, element, or list of selectors/elements will be excluded from traversal.
 - **onComplete**: (Function) the callback to be invoked when the inspection is finished. The function is passed an array of errors that were reported by individual rules.
 
-Here's an example:
+Here are the default configuration values:
+
+```js
+config: {
+  useRules: null,
+  domRoot: "html",
+  exclude: "svg",
+  excludeSubTree: ["svg", "iframe"],
+  onComplete: function(errors) {
+    errors.forEach(function(error) {
+      console.warn(error.message, error.context)
+    })
+  }
+}
+```
+
+Here is how you might override the default configurations:
 
 ```js
 HTMLInspector.inspect({
   useRules: ["some-rule-name", "some-other-rule-name"],
   domRoot: "body",
+  exclude: "iframe",
+  excludeSubTree: ["svg", "template"],
   onComplete: function(errors) {
     errors.forEach(function(error) {
       // report errors to external service...
@@ -62,14 +91,14 @@ HTMLInspector.inspect({
 })
 ```
 
-Alternatively, if you only need to set a single configuration option, you don't need to pass an object, the `inspect` method will figure out what it is based on its type.
+For convenience, some of the config options may be passed as single arguments. If `.inspect()` receives an argument that is an array it is assume to be the `useRules` option, if it's an string or DOM element it's assumed to be the `domeRoot` option, and if its a function it's assumed to be the `onComplete` callback.
 
 ```js
 // only set the useRules options
 HTMLInspector.inspect(["some-rule-name", "some-other-rule-name"])
 
 // only set the domRoot
-HTMLInspector.inspect($("#foobar"))
+HTMLInspector.inspect("#content")
 
 // only set the onComplete callback
 HTMLInspector.inspect(function(errors) {
@@ -93,13 +122,13 @@ Here are the validation rules that ship with HTML Inspector. (Expect this list t
 
 - **Validate Elements**: Inspect each element in the DOM and reports any elements that are invalid or obsolete. This will catch simple things like misspelled tags (`<il>` instead of `<li>`), and it will inform you of deprecated tags (like `<center>`, `<font>`, and more recently `<hgroup>`). Any element you don't want to be warned about can be whitelisted.
 
+- **Validate Element Location**: Make sure that elements don't appear as children of parents they're not allowed to descend from. An example of this is a block element like `<div>` appearing as the child of an inline elements like `<span>`.
+
 - **Validate Attributes**: Like validating elements, this rule will let you know if you're using attributes that don't belong on a particular element or perhaps don't belong on any element. If your project uses custom attributes (like `ng-*` in AngularJS) they can be whitelisted.
 
 - **Duplicate IDs**: Warn if non-unique IDs are found on the same page.
 
 - **Unique Elements**: Warn if elements that should be unique (like `<title>` and `<main>`) appear more than once in the document.
-
-- **Scoped Styles**: `<style>` elements that appear outside of the document `<head>` are required to have a scoped attribute.
 
 ### Best Practices
 
@@ -319,6 +348,19 @@ npm install
 bower install
 ```
 
+## Browser Support
+
+HTML Inspector has been tested and known to work in the latest versions of all modern browsers including Chrome, Firefox, Safari, Opera, and Internet Explorer. It will not work in older browsers that do not support ES5 methods, the CSS Object Model, or `console.warn()`. Since HTML Inspector is primarily a development tool, it is not intended to work in browsers that aren't typically used for development and don't support modern Web standards.
+
+If you need to test your site in older versions of IE and don't want to see JavaScript errors, simply wrap all your HTML Inspector code inside a conditional comment, so it is ignored by IE9 and below. Here is an example:
+
+```html
+<!--[if gt IE 9]><!-->
+  <script src="path/to/html-inspector.js"></script>
+  <script>HTMLInspector.inspect()</script>
+<!--<![endif]-->
+```
+
 ## Running the Tests
 
 If Grunt and all the dependencies are installed, you can run the Jasmine tests with the following command.
@@ -336,3 +378,7 @@ I'm always open to feedback and suggestions for how to make HTML Inspector bette
 If you're submitting a bug report, please search the issues to make sure there isn't one already filed.
 
 If you're submitting a pull request please read [CONTRIBUTING.md](https://github.com/philipwalton/html-inspector/blob/master/CONTRIBUTING.md) before submitting.
+
+## FAQs
+
+The FAQs section has grown rather large, so it has been moved to its own page. You can find the [full FAQs here](https://github.com/philipwalton/html-inspector/blob/master/FAQs.md).

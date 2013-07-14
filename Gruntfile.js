@@ -23,6 +23,7 @@ module.exports = function(grunt) {
         src: [
           "src/intro.js",
           "src/utils.js",
+          "src/callbacks.js",
           "src/listener.js",
           "src/reporter.js",
           "src/rules.js",
@@ -36,9 +37,12 @@ module.exports = function(grunt) {
       },
       spec: {
         src: [
+          "spec/src/helpers.js",
           "spec/src/inspector-spec.js",
+          "spec/src/callbacks-spec.js",
           "spec/src/listener-spec.js",
           "spec/src/reporter-spec.js",
+          "spec/src/utils-spec.js",
           "spec/src/modules-intro.js",
           "spec/src/modules/*.js",
           "spec/src/modules-outro.js",
@@ -52,6 +56,7 @@ module.exports = function(grunt) {
         src: [
           "src/intro.js",
           "src/utils.js",
+          "src/callbacks.js",
           "src/listener.js",
           "src/reporter.js",
           "src/rules.js",
@@ -76,7 +81,9 @@ module.exports = function(grunt) {
       }
     },
     jshint: {
-      options: grunt.file.readJSON(".jshintrc"),
+      options: {
+        jshintrc: ".jshintrc",
+      },
       dist: {
         src: "<%= concat.dist.dest %>"
       },
@@ -87,7 +94,7 @@ module.exports = function(grunt) {
     watch: {
       scripts: {
         files: ["src/**/*.js"],
-        tasks: ["concat:dist", "jshint:dist"]
+        tasks: ["concat:dist", "strip-test-code:dist", "jshint:dist"]
       },
       spec: {
         files: ["spec/src/**/*.js"],
@@ -100,25 +107,43 @@ module.exports = function(grunt) {
     },
     jasmine: {
       options: {
-        vendor: grunt.file.readJSON(".bowerrc").directory + "/jquery/jquery.js",
         specs: "spec/html-inspector-spec.js",
-        styles: "spec/html-inspector-spec.css",
+        styles: ["spec/html-inspector-spec.css", "spec/importer-spec.css"],
         outfile: "spec-runner.html",
         keepRunner: true
       },
-      src: ["dist/html-inspector.js"]
+      dist: {
+        src: ["dist/html-inspector.js"]
+      },
+      builds: {
+        src: [
+          "dist/html-inspector.core.js",
+          "dist/html-inspector.validation.js",
+          "dist/html-inspector.best-practices.js",
+          "dist/html-inspector.convention.js"
+        ]
+      }
+    },
+    strip_code: {
+      options: {},
+      dist: {
+        src: "dist/*.js"
+      }
     }
-  });
+  })
 
   // These plugins provide necessary tasks.
-  grunt.loadNpmTasks("grunt-contrib-concat");
-  grunt.loadNpmTasks("grunt-contrib-jshint");
-  grunt.loadNpmTasks("grunt-contrib-watch");
-  grunt.loadNpmTasks('grunt-contrib-jasmine');
+  grunt.loadNpmTasks("grunt-contrib-concat")
+  grunt.loadNpmTasks("grunt-contrib-jshint")
+  grunt.loadNpmTasks("grunt-contrib-watch")
+  grunt.loadNpmTasks("grunt-contrib-jasmine")
+  grunt.loadNpmTasks("grunt-strip-code")
 
   // Default task.
-  grunt.registerTask("default", ["concat", "jshint"]);
+  grunt.registerTask("default", ["concat", "strip_code", "jshint"])
 
-  grunt.registerTask("test", ["concat", "jshint", "jasmine"]);
+  grunt.registerTask("test", ["concat", "jshint", "jasmine"])
+  grunt.registerTask("test:dist", ["concat", "jshint", "jasmine:dist"])
+  grunt.registerTask("test:builds", ["concat", "jshint", "jasmine:builds"])
 
-};
+}

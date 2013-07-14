@@ -77,10 +77,17 @@
     "bem-conventions",
     config,
     function(listener, reporter, config) {
+
+      var parents = this.utils.parents
+        , matches = this.utils.matches
+
       listener.on('class', function(name) {
         if (config.isElement(name)) {
           // check the ancestors for the block class
-          if (!$(this).parents().is("." + config.getBlockName(name))) {
+          var ancestorIsBlock = parents(this).some(function(el) {
+            return matches(el, "." + config.getBlockName(name))
+          })
+          if (!ancestorIsBlock) {
             reporter.warn(
               "bem-conventions",
               "The BEM element '" + name
@@ -91,7 +98,7 @@
           }
         }
         if (config.isModifier(name)) {
-          if (!$(this).is("." + config.getBlockName(name))) {
+          if (!matches(this, "." + config.getBlockName(name))) {
             reporter.warn(
               "bem-conventions",
               "The BEM modifier class '" + name

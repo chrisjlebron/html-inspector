@@ -1,6 +1,13 @@
 describe("validation", function() {
 
   var validation = HTMLInspector.modules.validation
+    , originalElementWhitelist = validation.elementWhitelist
+    , originalAttributeWhitelist = validation.attributeWhitelist
+
+  afterEach(function() {
+    validation.elementWhitelist = originalElementWhitelist
+    validation.attributeWhitelist = originalAttributeWhitelist
+  })
 
   it("can determine if an element is a valid HTML element", function() {
     expect(validation.isElementValid("p")).toBe(true)
@@ -50,5 +57,38 @@ describe("validation", function() {
     expect(validation.getRequiredAttributesForElement("div")).toEqual([])
   })
 
+  it("can determine if a child elememnt is allowed inside it's parent", function() {
+    expect(validation.isChildAllowedInParent("div", "ul")).toBe(false)
+    expect(validation.isChildAllowedInParent("div", "span")).toBe(false)
+    expect(validation.isChildAllowedInParent("section", "em")).toBe(false)
+    expect(validation.isChildAllowedInParent("title", "body")).toBe(false)
+    expect(validation.isChildAllowedInParent("strong", "p")).toBe(true)
+    expect(validation.isChildAllowedInParent("li", "ol")).toBe(true)
+    expect(validation.isChildAllowedInParent("fieldset", "form")).toBe(true)
+    expect(validation.isChildAllowedInParent("td", "tr")).toBe(true)
+  })
+
+  it("ignores elements that are whitelisted", function() {
+    validation.elementWhitelist = validation.elementWhitelist.concat(["foo", "bar", "font", "center"])
+    // valid elements
+    expect(validation.isElementValid("foo")).toBe(true)
+    expect(validation.isElementValid("bar")).toBe(true)
+    // obsolete elements
+    expect(validation.isElementObsolete("font")).toBe(false)
+    expect(validation.isElementObsolete("center")).toBe(false)
+  })
+
+  it("ignores attributes that are whitelisted", function() {
+    validation.attributeWhitelist = validation.attributeWhitelist.concat(["src", "placeholder", "align", /^bg[a-z]+$/])
+    // valid elements
+    expect(validation.isAttributeValidForElement("placeholder", "select")).toBe(true)
+    expect(validation.isAttributeValidForElement("ng-model", "div")).toBe(true)
+    // obsolete elements
+    expect(validation.isAttributeObsoleteForElement("align", "div")).toBe(false)
+    expect(validation.isAttributeObsoleteForElement("bgcolor", "body")).toBe(false)
+    // required attributes
+    expect(validation.isAttributeRequiredForElement("src", "img")).toBe(false)
+
+  })
 
 })

@@ -17,17 +17,18 @@ HTMLInspector.rules.add(
   {
     whitelist: []
   },
-  function(listener, reporter) {
+  function(listener, reporter, config) {
 
     var elements = []
-      , whitelist = this.whitelist
+      , whitelist = config.whitelist
+      , matches = this.utils.matches
 
     function isWhitelisted(el) {
       if (!whitelist) return false
-      if (typeof whitelist == "string") return $(el).is(whitelist)
+      if (typeof whitelist == "string") return matches(el, whitelist)
       if (Array.isArray(whitelist)) {
         return whitelist.length && whitelist.some(function(item) {
-          return $(el).is(item)
+          return matches(el, item)
         })
       }
       return false
@@ -44,13 +45,18 @@ HTMLInspector.rules.add(
         if (el.nodeName.toLowerCase() != "script") break
       }
       elements.forEach(function(el) {
-        if (el.nodeName.toLowerCase() == "script" && !isWhitelisted(el)) {
-          reporter.warn(
-            "script-placement",
-            "<script> elements should appear right before "
-            + "the closing </body> tag for optimal performance.",
-            el
-          )
+        if (el.nodeName.toLowerCase() == "script") {
+          // scripts with the async or defer attributes are safe
+          if (el.async === true || el.defer === true) return
+          // at this point, if the script isn't whitelisted, throw an error
+          if (!isWhitelisted(el)) {
+            reporter.warn(
+              "script-placement",
+              "<script> elements should appear right before "
+              + "the closing </body> tag for optimal performance.",
+              el
+            )
+          }
         }
       })
     })
@@ -83,15 +89,21 @@ HTMLInspector.rules.add(
 HTMLInspector.rules.add(
   "unused-classes",
   {
-    whitelist: /^js\-|^supports\-|^language\-|^lang\-/
+    whitelist: [
+      /^js\-/,
+      /^supports\-/,
+      /^language\-/,
+      /^lang\-/
+    ]
   },
   function(listener, reporter, config) {
 
     var css = HTMLInspector.modules.css
       , classes = css.getClassSelectors()
+      , foundIn = this.utils.foundIn
 
-    listener.on('class', function(name) {
-      if (!config.whitelist.test(name) && classes.indexOf(name) == -1) {
+    listener.on("class", function(name) {
+      if (!foundIn(name, config.whitelist) && classes.indexOf(name) < 0) {
         reporter.warn(
           "unused-classes",
           "The class '"
