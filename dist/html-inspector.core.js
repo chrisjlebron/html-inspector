@@ -207,11 +207,12 @@ function Reporter() {
   this._errors = []
 }
 
-Reporter.prototype.warn = function(rule, message, context) {
+Reporter.prototype.warn = function(rule, message, context, priority) {
   this._errors.push({
     rule: rule,
     message: message,
-    context: context
+    context: context,
+    priority: priority
   })
 }
 
@@ -342,8 +343,27 @@ var HTMLInspector = (function() {
       exclude: "svg",
       excludeSubTree: ["svg", "iframe"],
       onComplete: function(errors) {
+        // set default console.log styles
+        var msgStyle = "font-size:1.2em;line-height:2;padding:.25em;background-color:aliceblue;color:white;"
         errors.forEach(function(error) {
-          console.warn(error.message, filterCrossOrigin(error.context))
+
+            error.priority = typeof error.priority !== "undefined" ? error.priority : "default"
+            switch (error.priority.toLowerCase()) {
+              case "high":
+                msgStyle += "background-color:crimson;"
+                break
+              case "medium":
+                msgStyle += "background-color:tomato;"
+                break
+              case "low":
+                msgStyle += "background-color:royalblue;"
+                break
+              default:
+                msgStyle += "color:black;"
+                break
+            }
+
+          console.log('%c' + error.message, msgStyle, filterCrossOrigin(error.context))
         })
       }
     },
@@ -389,6 +409,14 @@ var HTMLInspector = (function() {
       parents: parents
     }
 
+    /* test-code */
+    ,
+    _constructors: {
+      Listener: Listener,
+      Reporter: Reporter,
+      Callbacks: Callbacks
+    }
+    /* end-test-code */
   }
 
   return inspector
